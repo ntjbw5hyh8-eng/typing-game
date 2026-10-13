@@ -1,1 +1,271 @@
 
+
+<!DOCTYPE html>
+
+<html lang="ja">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>すしタイピングDX</title>
+
+<style>
+
+*{box-sizing:border-box}
+
+body{margin:0;background:#fff5df;color:#34251d;font-family:Arial,sans-serif;text-align:center}
+
+header{background:#d9362b;color:white;padding:18px;font-size:30px;font-weight:bold}
+
+main{max-width:950px;margin:auto;padding:20px}
+
+.panel{background:white;border-radius:18px;padding:18px;margin:14px 0;box-shadow:0 4px 14px #0001}
+
+button,select{font-size:17px;padding:12px 20px;border-radius:10px;border:1px solid #ddd}
+
+button{background:#d9362b;color:white;font-weight:bold;cursor:pointer}
+
+.stats{display:flex;justify-content:space-around;gap:10px;flex-wrap:wrap}
+
+.stat{background:#fff0d1;padding:12px 22px;border-radius:12px;min-width:110px}
+
+#arena{height:270px;background:linear-gradient(#d8f2ff 0 72%,#8cc78d 72%);border-radius:16px;position:relative;overflow:hidden}
+
+#plate{position:absolute;top:45px;left:100%;width:175px}
+
+#sushi{font-size:70px;line-height:1.2}
+
+#word{font-size:24px;font-weight:bold;background:white;border-radius:8px;padding:5px}
+
+#lane{position:absolute;top:185px;left:0;width:100%;font-size:20px;font-weight:bold}
+
+#typed{font-size:27px;color:#d9362b;font-weight:bold;margin:14px;min-height:36px;letter-spacing:2px}
+
+#bar{height:9px;background:#42ad68;width:100%;border-radius:8px;transition:width .05s linear}
+
+#message{font-weight:bold;min-height:26px}
+
+#result{font-size:23px;font-weight:bold}
+
+.small{font-size:13px;color:#777}
+
+</style>
+
+</head>
+
+<body>
+
+<header>🍣 すしタイピングDX</header>
+
+<main>
+
+<div class="panel">
+
+ <div class="stats">
+
+  <div class="stat">スコア<br><b id="score">0</b></div>
+
+  <div class="stat">正解数<br><b id="correct">0</b></div>
+
+  <div class="stat">ミス数<br><b id="miss">0</b></div>
+
+ </div>
+
+ <p>難易度　
+
+ <select id="level">
+
+ <option value="0">初級</option><option value="1">中級</option><option value="2">上級</option>
+
+ </select></p>
+
+ <button id="start">ゲームスタート</button>
+
+</div>
+
+<div class="panel">
+
+ <div id="arena">
+
+  <div id="plate"><div id="sushi">🍣</div><div id="word">sushi</div></div>
+
+  <div id="lane">⌨️ ここに単語が流れてくるよ！</div>
+
+ </div>
+
+ <div id="bar"></div>
+
+ <div id="message">スタートを押してね！</div>
+
+ <div id="typed"></div>
+
+ <p id="result"></p>
+
+ <p class="small">表示された英字をキーボードで入力。間違いは受け付けません。</p>
+
+</div>
+
+</main>
+
+<script>
+
+const data=[
+
+["すし","sushi"],["ねこ","neko"],["いぬ","inu"],["みず","mizu"],
+
+["りんご","ringo"],["さくら","sakura"],["たまご","tamago"],
+
+["でんしゃ","densha"],["ともだち","tomodachi"],["ありがとう","arigatou"],
+
+["がっこう","gakkou"],["おいしい","oishii"],["じてんしゃ","jitensha"],
+
+["すいぞくかん","suizokukan"],["どうぶつえん","doubutsuen"],
+
+["ちゅうがっこう","chuugakkou"],["しんぶん","shinbun"],
+
+["きょうしつ","kyoushitsu"],["おこのみやき","okonomiyaki"],
+
+["ぷろぐらみんぐ","puroguramingu"],["しょうがくせい","shougakusei"],
+
+["たいぴんぐ","taipingu"],["じょうほう","jouhou"],
+
+["こんぴゅーたー","konpyu-ta-"],["やきにく","yakiniku"]
+
+];
+
+const $=id=>document.getElementById(id);
+
+let running=false,score=0,correct=0,miss=0,current=null,pos=0,typed="",x=0;
+
+let deadline=0,last=0,raf=0;
+
+const speed=105,wordLimit=5000;
+
+function stats(){
+
+ $("score").textContent=score;$("correct").textContent=correct;$("miss").textContent=miss;
+
+}
+
+function newWord(){
+
+ const lv=+$("level").value;
+
+ let pool=data.filter(w=>w[1].length >= [0,4,7][lv]);
+
+ if(!pool.length)pool=data;
+
+ current=pool[Math.floor(Math.random()*pool.length)];
+
+ pos=0;typed="";
+
+ $("word").textContent=current[1];
+
+ $("typed").textContent="";
+
+ x=$("arena").clientWidth+10;
+
+ $("plate").style.left=x+"px";
+
+ deadline=performance.now()+wordLimit;
+
+ $("bar").style.width="100%";
+
+ $("message").textContent="入力してね！";
+
+}
+
+function finish(){
+
+ running=false;cancelAnimationFrame(raf);
+
+ $("start").textContent="もう一度プレイ";
+
+ $("message").textContent="ゲーム終了！";
+
+ $("result").textContent="スコア "+score+" 点 ／ 正解 "+correct+" ／ ミス "+miss;
+
+ $("plate").style.left="-200px";
+
+ $("lane").textContent="🍣 おつかれさま！";
+
+}
+
+function loop(now){
+
+ if(!running)return;
+
+ if(!last)last=now;
+
+ let dt=Math.min(now-last,50);last=now;
+
+ x-=speed*dt/1000;
+
+ $("plate").style.left=x+"px";
+
+ $("bar").style.width=Math.max(0,(deadline-now)/wordLimit*100)+"%";
+
+ if(now>=deadline||x < -190){
+
+  miss++;stats();newWord();
+
+ }
+
+ raf=requestAnimationFrame(loop);
+
+}
+
+$("start").addEventListener("click",()=>{
+
+ if(running)return;
+
+ score=0;correct=0;miss=0;last=0;stats();
+
+ $("result").textContent="";
+
+ $("lane").textContent="⌨️ キーボードで入力！";
+
+ running=true;$("start").textContent="プレイ中";
+
+ newWord();raf=requestAnimationFrame(loop);
+
+});
+
+document.addEventListener("keydown",e=>{
+
+ if(!running||e.ctrlKey||e.metaKey||e.altKey)return;
+
+ if(e.key==="Backspace"||e.key==="Delete")return;
+
+ if(e.key.length!==1)return;
+
+ const key=e.key.toLowerCase();
+
+ if(current[1][pos]===key){
+
+  typed+=key;pos++;score+=10;
+
+  $("typed").textContent=typed;stats();
+
+  if(pos===current[1].length){
+
+   correct++;score+=50;stats();newWord();
+
+  }
+
+ }else{
+
+  miss++;stats();$("message").textContent="ミス！ 正しいキーを入力してね";
+
+ }
+
+});
+
+</script>
+
+</body>
+
+</html>
